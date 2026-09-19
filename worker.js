@@ -282,7 +282,8 @@ WEB_PASS = "${WEB_PASS}"
 PROXY_PORT_ENV = os.getenv("PROXY_PORT")
 PROXY_PORT = int(PROXY_PORT_ENV or "7920")
 target_country = os.getenv("COUNTRY", "JP").upper()
-last_switch_trigger = 0  
+last_switch_trigger = 0
+switch_trigger_initialized = False
 
 state_lock = threading.Lock()
 dead_ips = set()
@@ -342,7 +343,7 @@ def get_recent_logs():
     except: return "Waiting for logs..."
 
 def update_config_loop():
-    global target_country, last_switch_trigger, PROXY_PORT, tun_main, tun_backup
+    global target_country, last_switch_trigger, switch_trigger_initialized, PROXY_PORT, tun_main, tun_backup
     while True:
         try:
             req = urllib.request.Request(f"{C2_URL}/api/config", headers=get_c2_headers())
@@ -364,7 +365,15 @@ def update_config_loop():
                     os._exit(0)
                 
                 with state_lock:
-                    force_switch = (switch_trigger > last_switch_trigger)
+                    # The first controller response establishes the baseline. A
+                    # switch_trigger already present before this Agent process
+                    # started is historical and must not be replayed on restart.
+                    if not switch_trigger_initialized:
+                        last_switch_trigger = switch_trigger
+                        switch_trigger_initialized = True
+                        force_switch = False
+                    else:
+                        force_switch = (switch_trigger > last_switch_trigger)
                     if target_country != desired_country or force_switch:
                         target_country = desired_country
                         if force_switch: print(f"[*] \u6536\u5230\u5F3A\u5236\u66F4\u6362\u6307\u4EE4\uFF0C\u6B63\u5728\u6E05\u9000\u901A\u9053\u5E76\u62C9\u9ED1\u5F53\u524D IP...", flush=True)
@@ -652,6 +661,13 @@ def maintain_pool():
             for ip in stale_ips: global_node_reservoir.pop(ip, None)
 
         with state_lock:
+            # Keep traffic bound to a live tunnel after failover and reconnect.
+            if proxy_server.ACTIVE_BIND == tun_backup.name and (not tun_backup.ready or not tun_backup.process or tun_backup.process.poll() is not None) and tun_main.ready and tun_main.process and tun_main.process.poll() is None:
+                proxy_server.ACTIVE_BIND = tun_main.name
+                print(f"[*] \u4E3B\u901A\u9053\u5DF2\u6062\u590D\uFF0C\u4E1A\u52A1\u7ED1\u5B9A\u5207\u56DE: {tun_main.name}", flush=True)
+            elif proxy_server.ACTIVE_BIND == tun_main.name and (not tun_main.ready or not tun_main.process or tun_main.process.poll() is not None) and tun_backup.ready and tun_backup.process and tun_backup.process.poll() is None:
+                proxy_server.ACTIVE_BIND = tun_backup.name
+                print(f"[*] \u4E3B\u901A\u9053\u4E0D\u53EF\u7528\uFF0C\u4E1A\u52A1\u7ED1\u5B9A\u5207\u81F3: {tun_backup.name}", flush=True)
             # FIX 2: \u4E25\u683C\u68C0\u6D4B\u901A\u9053\u662F\u5426\u6B63\u5728\u8FDE\u63A5\uFF0C\u9632\u6B62\u7531\u4E8E\u5C1A\u672A\u5C31\u7EEA\u5BFC\u81F4\u7684\u9519\u8BEF\u5224\u6B7B\u548C\u79D2\u5207\u6DF7\u4E71
             main_dead = False
             if not tun_main.is_connecting:
