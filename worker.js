@@ -661,6 +661,17 @@ def maintain_pool():
             for ip in stale_ips: global_node_reservoir.pop(ip, None)
 
         with state_lock:
+            # Reap a standby process that exited on its own. Without this,
+            # ready can remain True forever and prevent maintain_pool from
+            # selecting a replacement backup node.
+            if not tun_backup.is_connecting and (tun_backup.process is None or tun_backup.process.poll() is not None):
+                if tun_backup.process is not None or tun_backup.ready:
+                    tun_backup.process = None
+                    tun_backup.node = None
+                    tun_backup.entry_ip = ""
+                    tun_backup.egress_ip = ""
+                    tun_backup.ready = False
+                    print(f"[*] {tun_backup.name} \u8FDB\u7A0B\u5DF2\u9000\u51FA\uFF0C\u91CA\u653E\u5907\u7528\u69FD\u4F4D\u5E76\u91CD\u65B0\u9009\u8282\u70B9", flush=True)
             # Keep traffic bound to a live tunnel after failover and reconnect.
             if proxy_server.ACTIVE_BIND == tun_backup.name and (not tun_backup.ready or not tun_backup.process or tun_backup.process.poll() is not None) and tun_main.ready and tun_main.process and tun_main.process.poll() is None:
                 proxy_server.ACTIVE_BIND = tun_main.name
