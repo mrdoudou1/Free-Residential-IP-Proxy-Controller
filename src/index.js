@@ -384,12 +384,12 @@ def update_config_loop():
                         if tun_main.process:
                             try: tun_main.process.terminate(); tun_main.process.wait(2)
                             except: tun_main.process.kill()
-                        tun_main.ready = False; tun_main.process = None; tun_main.entry_ip = ""; tun_main.egress_ip = ""
+                        tun_main.ready = False; tun_main.process = None; tun_main.entry_ip = ""; tun_main.egress_ip = ""; tun_main.is_connecting = False
                         
                         if tun_backup.process:
                             try: tun_backup.process.terminate(); tun_backup.process.wait(2)
                             except: tun_backup.process.kill()
-                        tun_backup.ready = False; tun_backup.process = None; tun_backup.entry_ip = ""; tun_backup.egress_ip = ""
+                        tun_backup.ready = False; tun_backup.process = None; tun_backup.entry_ip = ""; tun_backup.egress_ip = ""; tun_backup.is_connecting = False
                         
                         last_switch_trigger = switch_trigger
         except Exception as e: pass
