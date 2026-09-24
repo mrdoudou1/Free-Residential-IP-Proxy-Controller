@@ -147,23 +147,23 @@ def socks5_client(client: socket.socket, first_byte: bytes) -> None:
     try:
         methods_count = recv_exact(client, 1)[0]
         methods = recv_exact(client, methods_count)
-
+        
         if b"\\x02" not in methods:
-            client.sendall(b"\\x05\\xFF")
+            client.sendall(b"\\x05\\xFF") 
             return
         client.sendall(b"\\x05\\x02")
-
+        
         auth_req = recv_exact(client, 2)
         if auth_req[0] != 1: return
         ulen = auth_req[1]
         uname = recv_exact(client, ulen)
         plen = recv_exact(client, 1)[0]
         upass = recv_exact(client, plen)
-
+        
         if uname != PROXY_USER or upass != PROXY_PASS:
-            client.sendall(b"\\x01\\x01")
+            client.sendall(b"\\x01\\x01") 
             return
-        client.sendall(b"\\x01\\x00")
+        client.sendall(b"\\x01\\x00") 
 
         version, command, _, address_type = recv_exact(client, 4)
         if version != 5 or command != 1: return
@@ -172,7 +172,7 @@ def socks5_client(client: socket.socket, first_byte: bytes) -> None:
         elif address_type == 4: host = socket.inet_ntop(socket.AF_INET6, recv_exact(client, 16))
         else: return
         port = int.from_bytes(recv_exact(client, 2), "big")
-
+        
         upstream = create_connection((host, port), timeout=20)
         client.sendall(b"\\x05\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x00")
         relay(client, upstream)
@@ -191,7 +191,7 @@ def http_client(client: socket.socket, first_byte: bytes) -> None:
             data += chunk
         head, rest = data.split(b"\\r\\n\\r\\n", 1)
         lines = head.decode("iso-8859-1", errors="replace").split("\\r\\n")
-
+        
         expected_auth = "Basic " + base64.b64encode(PROXY_USER + b":" + PROXY_PASS).decode("ascii")
         auth_passed = False
         for line in lines[1:]:
@@ -199,7 +199,7 @@ def http_client(client: socket.socket, first_byte: bytes) -> None:
                 if line.split(":", 1)[1].strip() == expected_auth:
                     auth_passed = True
                     break
-
+                    
         if not auth_passed:
             client.sendall(b"HTTP/1.1 407 Proxy Authentication Required\\r\\nProxy-Authenticate: Basic realm=\\"Proxy\\"\\r\\n\\r\\n")
             return
@@ -360,11 +360,11 @@ def update_config_loop():
                 switch_trigger = max(int(data.get("switch_trigger", 0)), int(instance_data.get("switch_trigger", 0)))
                 # Per-instance environment port is authoritative; never fall back to another Agent's global port.
                 new_port = int(instance_data.get("port") or PROXY_PORT)
-
+                
                 if new_port != PROXY_PORT:
                     print(f"[*] \u6536\u5230\u7AEF\u53E3\u53D8\u66F4\u6307\u4EE4 ({PROXY_PORT} -> {new_port})\uFF0C\u91CD\u542F\u5B88\u62A4\u8FDB\u7A0B...", flush=True)
                     os._exit(0)
-
+                
                 with state_lock:
                     # The first controller response establishes the baseline. A
                     # switch_trigger already present before this Agent process
@@ -379,18 +379,18 @@ def update_config_loop():
                         target_country = desired_country
                         if force_switch: print(f"[*] \u6536\u5230\u5F3A\u5236\u66F4\u6362\u6307\u4EE4\uFF0C\u6B63\u5728\u6E05\u9000\u901A\u9053\u5E76\u62C9\u9ED1\u5F53\u524D IP...", flush=True)
                         else: print(f"[*] \u7B56\u7565\u70ED\u5207\u6362: \u76EE\u6807\u91CD\u5B9A\u5411\u5230 {desired_country}...", flush=True)
-
+                        
                         if tun_main.entry_ip: dead_ips.add(tun_main.entry_ip)
                         if tun_main.process:
                             try: tun_main.process.terminate(); tun_main.process.wait(2)
                             except: tun_main.process.kill()
                         tun_main.ready = False; tun_main.process = None; tun_main.entry_ip = ""; tun_main.egress_ip = ""
-
+                        
                         if tun_backup.process:
                             try: tun_backup.process.terminate(); tun_backup.process.wait(2)
                             except: tun_backup.process.kill()
                         tun_backup.ready = False; tun_backup.process = None; tun_backup.entry_ip = ""; tun_backup.egress_ip = ""
-
+                        
                         last_switch_trigger = switch_trigger
         except Exception as e: pass
         time.sleep(15)
@@ -407,12 +407,12 @@ def c2_heartbeat_loop():
                     details.append({
                         "tunnel": tun.name,
                         "active": proxy_server.ACTIVE_BIND == tun.name,
-                        "country": tun.country,
-                        "port": PROXY_PORT,
-                        "connected_time": int(uptime),
+                        "country": tun.country, 
+                        "port": PROXY_PORT, 
+                        "connected_time": int(uptime), 
                         "node_ip": tun.egress_ip if tun.egress_ip else tun.entry_ip
                     })
-
+        
         with reservoir_lock:
             country_stats = {}
             for node in global_node_reservoir.values():
@@ -455,9 +455,9 @@ def harvest_snapshot_nodes() -> list:
             if not ip or not row.get("OpenVPN_ConfigData_Base64"): continue
             raw_ping = row.get("Ping", "")
             nodes.append({
-                "ip": ip,
-                "ping": int(raw_ping) if raw_ping.isdigit() else 9999,
-                "country": row.get("CountryShort", "").upper(),
+                "ip": ip, 
+                "ping": int(raw_ping) if raw_ping.isdigit() else 9999, 
+                "country": row.get("CountryShort", "").upper(), 
                 "config": base64.b64decode(row["OpenVPN_ConfigData_Base64"]).decode("utf-8", errors="replace"),
                 "harvested_at": time.time()
             })
@@ -500,19 +500,19 @@ def connect_node(tun: Tunnel, node: dict):
         cfg_path = CONFIG_DIR / f"{tun.name}.ovpn"
         log_file = WORKSPACE / f"{tun.name}_err.log"
         cfg_path.write_text(node["config"], encoding="utf-8")
-
+        
         ovpn_version = subprocess.run(["openvpn", "--version"], capture_output=True, text=True).stdout
         cipher_args = ["--ncp-ciphers", "AES-128-CBC:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305"] if "2.4" in ovpn_version else ["--data-ciphers", "AES-128-CBC:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305", "--data-ciphers-fallback", "AES-128-CBC"]
-
+        
         # \u5F3A\u5236\u6DFB\u52A0 --nobind \u89E3\u9664\u7AEF\u53E3\u51B2\u7A81\uFF0C--route-nopull \u5265\u593A\u8DEF\u7531\u4FEE\u6539\u6743
-        cmd = ["openvpn", "--config", str(cfg_path), "--dev", tun.name, "--dev-type", "tun",
+        cmd = ["openvpn", "--config", str(cfg_path), "--dev", tun.name, "--dev-type", "tun", 
                "--nobind", "--route-nopull",
-               "--pull-filter", "ignore", "route-ipv6", "--pull-filter", "ignore", "ifconfig-ipv6",
-               "--auth-user-pass", str(AUTH_FILE), "--auth-nocache",
+               "--pull-filter", "ignore", "route-ipv6", "--pull-filter", "ignore", "ifconfig-ipv6", 
+               "--auth-user-pass", str(AUTH_FILE), "--auth-nocache", 
                "--connect-timeout", "5", "--connect-retry-max", "1", "--verb", "3"] + cipher_args
-
+               
         with open(log_file, "w") as f: process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
-
+        
         success = False
         for _ in range(15):
             time.sleep(1)
@@ -521,11 +521,11 @@ def connect_node(tun: Tunnel, node: dict):
                 if "Initialization Sequence Completed" in log_file.read_text():
                     success = True; break
             except: pass
-
+                
         if success and process.poll() is None:
             setup_routing(tun.name, tun.table_id)
-            time.sleep(1)
-
+            time.sleep(1) 
+            
             # --- \u7A7F\u900F\u83B7\u53D6\u901A\u9053\u771F\u5B9E\u51FA\u53E3 IP ---
             true_ip = ""
             try:
@@ -534,9 +534,9 @@ def connect_node(tun: Tunnel, node: dict):
                 if candidate_ip and candidate_ip.count('.') == 3:
                     true_ip = candidate_ip
             except: pass
-
+            
             egress_ip = true_ip if true_ip else node['ip']
-
+            
             if true_ip and true_ip != node['ip']:
                 print(f"[*] {tun.name} \u63A2\u6D4B\u5230\u771F\u5B9E\u51FA\u53E3 IP \u4E0E\u5165\u53E3\u4E0D\u4E00\u81F4: \u5165\u53E3 {node['ip']} -> \u51FA\u53E3 {true_ip}", flush=True)
 
@@ -548,11 +548,11 @@ def connect_node(tun: Tunnel, node: dict):
                 with urllib.request.urlopen(check_req, timeout=10) as check_res:
                     data = json.loads(check_res.read().decode("utf-8"))
                     isp_flag = str(data.get("isp", {}).get("flag", "")).lower()
-
+                    
                     if isp_flag == "hosting":
                         is_residential = False
             except Exception as e: pass
-
+            
             if not is_residential:
                 print(f"[-] {tun.name} \u8282\u70B9\u51FA\u53E3 ({egress_ip}) \u68C0\u6D4B\u4E3A\u673A\u623F IP\uFF0C\u6B8B\u5FCD\u629B\u5F03\uFF01", flush=True)
                 penalize_node(node["ip"], 50000)  # \u673A\u623F IP \u6781\u91CD\u60E9\u7F5A\uFF0C\u51E0\u4E4E\u4E0D\u518D\u542F\u7528
@@ -592,7 +592,16 @@ def connect_node(tun: Tunnel, node: dict):
             except: process.kill()
             dead_ips.add(node["ip"])
     finally:
-        with state_lock: tun.is_connecting = False
+        with state_lock:
+            tun.is_connecting = False
+            # A failed candidate must release its reservation immediately;
+            # otherwise the stale entry_ip can block the next replacement
+            # and leave the Agent with only one reported tunnel.
+            if not tun.ready:
+                tun.process = None
+                tun.node = None
+                tun.entry_ip = ""
+                tun.egress_ip = ""
 
 def health_check_loop():
     global tun_main, tun_backup, dead_ips
@@ -636,7 +645,7 @@ def get_best_candidate():
     with reservoir_lock:
         all_pool_nodes = sorted(list(global_node_reservoir.values()), key=lambda x: x["ping"])
         candidates = [n for n in all_pool_nodes if n["country"] == target_country and n["ip"] not in dead_ips]
-
+        
         active_ips = []
         if tun_main.entry_ip: active_ips.append(tun_main.entry_ip)
         if tun_backup.entry_ip: active_ips.append(tun_backup.entry_ip)
@@ -694,7 +703,7 @@ def maintain_pool():
                     print(f"[*] \u26A1 \u4E3B\u901A\u9053\u66B4\u6BD9\uFF0C\u8F6F\u5F00\u5173\u79D2\u5207\uFF01\u65E0\u7F1D\u63A5\u7BA1\u4E1A\u52A1\u81F3\u5907\u7528\u901A\u9053: \u51FA\u53E3 {tun_backup.egress_ip or tun_backup.entry_ip}", flush=True)
                     # \u4FDD\u6301 main/backup \u8EAB\u4EFD\u56FA\u5B9A\uFF0C\u53EA\u5207\u6362\u4E1A\u52A1\u7ED1\u5B9A
                     proxy_server.ACTIVE_BIND = tun_backup.name
-
+                    
                     # \u5F02\u6B65\u6E05\u7406\u6B7B\u6389\u7684\u65E7\u4E3B\u5361 (\u73B0\u5728\u7684 tun_backup)
                     if tun_main.process:
                         try: tun_main.process.terminate(); tun_main.process.wait(2)
@@ -740,9 +749,9 @@ def main():
     get_public_ip()
     setup_env()
     subprocess.run(["pkill", "-f", f"openvpn.*{tun_main.name}|{tun_backup.name}"], capture_output=True)
-
+    
     proxy_server.ACTIVE_BIND = tun_main.name
-
+    
     # Environment-file values are authoritative for multi-agent services.
     # Only the legacy service without PROXY_PORT falls back to global_config.
     if not PROXY_PORT_ENV:
@@ -1267,7 +1276,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
         ::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 1); }
-        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
@@ -1284,7 +1293,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                     \u76F4\u94FE\u63D0\u53D6 API: <a href="/api/proxies" target="_blank" class="text-indigo-400 hover:text-indigo-300 border-b border-indigo-400/30 hover:border-indigo-300 transition-colors">${domain}/api/proxies</a>
                 </p>
             </div>
-
+            
             <div class="flex flex-col gap-3 w-full md:w-auto">
                 <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl overflow-hidden shadow-lg">
                     <div class="bg-slate-800/50 px-4 py-2 border-b border-slate-700/50 flex items-center gap-2">
@@ -1334,23 +1343,23 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                 <div class="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
                     <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                 </div>
-
+                
                 <div class="mb-6 relative z-10">
                     <h2 class="text-2xl font-bold text-slate-100 tracking-wide mb-1 flex items-center gap-2">\u4E3B\u5907\u53CC\u6D3B\u8C03\u5EA6\u5F15\u64CE <span class="bg-indigo-500/20 text-indigo-400 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border border-indigo-500/30">主备模式</span></h2>
                     <p class="text-sm text-slate-400">\u5355\u8DEF\u7AEF\u53E3\u9501\u5B9A\uFF0C\u5185\u7F6E\u4E3B\u5907\u53CC\u8DEF\u96A7\u9053 (tun_main / tun_backup)\uFF0C\u901A\u9053\u6B7B\u6D3B\u5C06\u7531\u8F6F\u5F00\u5173\u77AC\u95F4\u63A5\u7BA1\u3002</p>
                 </div>
-
+                
                 <div class="flex flex-wrap items-center bg-slate-950/50 border border-slate-800/80 rounded-xl p-5 relative z-10 gap-y-4">
                     <div class="flex items-center gap-3 mr-3 border-r border-slate-700/50 pr-4">
                         <span class="text-slate-400 text-sm font-medium whitespace-nowrap">\u76EE\u6807\u5730\u533A:</span>
                         <input type="text" id="slot-cfg-0" value="JP" maxlength="2" class="bg-slate-900 border border-slate-700 rounded-lg py-2 w-16 text-white font-bold text-lg uppercase text-center focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all shadow-inner" placeholder="US" />
                     </div>
-
+                    
                     <div class="flex items-center gap-3 mr-4">
                         <span class="text-slate-400 text-sm font-medium whitespace-nowrap">\u670D\u52A1\u7AEF\u53E3:</span>
                         <input type="number" id="slot-port" value="7920" min="1024" max="65535" class="bg-slate-900 border border-slate-700 rounded-lg py-2 w-24 text-white font-bold text-lg text-center focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all shadow-inner" placeholder="7920" />
                     </div>
-
+                    
                     <button onclick="saveConfig()" class="group relative px-6 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold shadow-lg shadow-blue-900/20 hover:shadow-indigo-900/40 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ml-auto">
                         <div class="absolute inset-0 bg-white/20 group-hover:translate-x-full -translate-x-full transform transition-transform duration-300 ease-in-out skew-x-12"></div>
                         <span class="flex items-center gap-2">
@@ -1358,7 +1367,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                             \u4E0B\u53D1\u7B56\u7565
                         </span>
                     </button>
-
+                    
                     <div class="h-8 w-px bg-slate-800 mx-2 hidden sm:block"></div>
 
                     <button onclick="switchIP()" class="group relative px-6 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-bold shadow-lg shadow-purple-900/20 hover:shadow-pink-900/40 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
@@ -1371,7 +1380,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                 </div>
             </div>
         </div>
-
+        
         <div class="bg-slate-900/40 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-xl overflow-hidden shadow-black/20 mb-8">
             <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
                 <h3 class="font-semibold text-slate-200">\u591A Agent \u5B9E\u4F8B\u914D\u7F6E</h3>
@@ -1398,7 +1407,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                     \u539F\u7248\u9875\u9762 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                 </a>
             </div>
-
+            
             <div id="native-score-container" class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-[#090E17]">
                 <div class="col-span-full py-16 flex flex-col items-center justify-center text-slate-500">
                     <svg class="animate-spin h-8 w-8 text-indigo-500 mb-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -1630,11 +1639,11 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
         async function loadNativeIpScore(ip) {
             const container = document.getElementById('native-score-container');
             container.innerHTML = '<div class="col-span-full py-16 flex flex-col items-center justify-center text-slate-500"><svg class="animate-spin h-8 w-8 text-indigo-500 mb-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>\u7A7F\u900F\u8BF7\u6C42\u4E2D\uFF0C\u6B63\u5728\u6784\u5EFA\u539F\u751F\u8D28\u68C0\u62A5\u544A...</span></div>';
-
+            
             try {
                 const res = await apiFetch('/api/testisp-lookup/' + encodeURIComponent(ip));
                 const rawText = await res.text();
-
+                
                 let d;
                 try {
                     d = JSON.parse(rawText);
@@ -1642,7 +1651,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                     const safeText = rawText.substring(0, 500).replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     throw new Error(\`\u76EE\u6807\u63A5\u53E3\u8FD4\u56DE\u4E86\u975E JSON \u683C\u5F0F\u6570\u636E(\u53EF\u80FD API \u8DEF\u5F84\u9519\u8BEF\u6216\u88AB\u4E91\u7AEF\u76FE\u62E6\u622A)\u3002<br>HTTP \u72B6\u6001\u7801: \${res.status}<br><div class="mt-3 text-left bg-slate-900 p-3 rounded text-xs text-rose-300 font-mono break-all overflow-y-auto max-h-32 border border-rose-500/30">\${safeText}</div>\`);
                 }
-
+                
                 if (!d || !d.geo || !d.isp) {
                     container.innerHTML = \`<div class="col-span-full text-center py-8 text-rose-400 bg-rose-500/10 rounded-xl border border-rose-500/20">\u65E0\u6CD5\u83B7\u53D6\u62A5\u544A: \u63A5\u53E3\u8FD4\u56DE\u6570\u636E\u7ED3\u6784\u5F02\u5E38 \${d.error || ''}</div>\`;
                     return;
@@ -1651,11 +1660,11 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                 const isHosting = d.isp.flag === 'hosting';
                 const threat = d.risk.threat_listed;
                 const isNative = d.geo.is_native;
-
-                const tags = isHosting
-                    ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold">\u673A\u623FIP</span>'
+                
+                const tags = isHosting 
+                    ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold">\u673A\u623FIP</span>' 
                     : '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-bold">\u5BB6\u5EAD\u5BBD\u5E26</span>';
-
+                
                 const locStr = [d.geo.country, d.geo.city].filter(Boolean).join(" ");
                 const orgStr = d.isp.org || '-';
 
@@ -1664,7 +1673,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                         <div class="flex items-center gap-4">
                             <span class="text-3xl font-extrabold font-mono text-white tracking-tight drop-shadow-sm">\${ip}</span>
                             <span class="text-slate-400 text-sm hidden sm:flex items-center border-l border-slate-700 pl-4 h-6">
-                                <span class="uppercase tracking-widest text-indigo-400 mr-2 text-xs font-bold">\${d.geo.country_code || 'N/A'}</span>
+                                <span class="uppercase tracking-widest text-indigo-400 mr-2 text-xs font-bold">\${d.geo.country_code || 'N/A'}</span> 
                                 \${locStr} \xB7 \${orgStr}
                             </span>
                         </div>
@@ -1764,7 +1773,7 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                         if (newIp !== currentScoreIp) {
                             currentScoreIp = newIp;
                             document.getElementById('ip-score-section').style.display = 'block';
-
+                            
                             // \u9488\u5BF9 testisp.info \u524D\u7AEF\u9ED8\u8BA4\u4EC5\u67E5\u672C\u673A\u7684\u9632\u5446\u673A\u5236\uFF1A\u81EA\u52A8\u590D\u5236 IP \u5230\u526A\u8D34\u677F\uFF0C\u8DF3\u8F6C\u540E\u7531\u7528\u6237\u7C98\u8D34
                             const scoreLink = document.getElementById('ip-score-link');
                             scoreLink.href = \`https://testisp.info/?ip=\${newIp}\`;
@@ -1782,31 +1791,31 @@ var DASHBOARD_HTML = /* @__PURE__ */ __name((domain, webUser, webPass, proxyUser
                         }
                     }
                 }
-
+                
                 if (servers[0] && servers[0].logs) {
                     const isAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 30;
-
+                    
                     let logHTML = servers[0].logs
                         .replace(/</g, '&lt;').replace(/>/g, '&gt;')
                         .replace(/\\[\\*\\]/g, '<span class="text-indigo-400 font-bold">[*]</span>')
                         .replace(/\\[\\+\\]/g, '<span class="text-emerald-400 font-bold">[+]</span>')
                         .replace(/\\[\\-\\]/g, '<span class="text-rose-400 font-bold">[-]</span>')
                         .replace(/\\[\\!\\]/g, '<span class="text-amber-400 font-bold">[!]</span>');
-
+                        
                     terminal.innerHTML = '<pre class="whitespace-pre-wrap break-all">' + logHTML + '</pre>';
-
+                    
                     if (isAtBottom) {
                         terminal.scrollTop = terminal.scrollHeight;
                     }
                 }
-
+                
             } catch (err) {
                 console.error('fetchNodes failed', err);
                 const terminal = document.getElementById('terminal-output');
                 if (terminal) terminal.innerHTML = '<div class="text-amber-400">\u8282\u70B9\u63A5\u53E3\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u5237\u65B0\u9875\u9762</div>';
             }
         }
-
+        
         ['agent-ip-input', 'agent-port-input'].forEach(id => {
             document.getElementById(id)?.addEventListener('input', updateAgentCommands);
         });
