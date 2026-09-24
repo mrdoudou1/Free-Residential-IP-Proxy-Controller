@@ -652,13 +652,12 @@ def get_best_candidate():
         candidates = [n for n in candidates if n["ip"] not in active_ips]
 
         if not candidates:
-            has_blacklisted = any(n["country"] == target_country for n in all_pool_nodes)
-            if has_blacklisted:
-                dead_ips.clear()
-                print(f"[!] \u26A1 \u7D27\u6025\u7194\u65AD\uFF1A[{target_country}] \u8282\u70B9\u9ED1\u540D\u5355\u91CA\u653E\u6551\u573A\uFF08\u7531\u4E8E\u52A8\u6001\u4FE1\u8A89\u7CFB\u7EDF\u5B58\u5728\uFF0C\u5386\u53F2\u574F\u8282\u70B9\u5C06\u88AB\u6C89\u5E95\uFF09", flush=True)
-                candidates = [n for n in all_pool_nodes if n["country"] == target_country and n["ip"] not in active_ips]
+            # All candidates for this country are currently blacklisted or
+            # already reserved. Do not immediately clear the blacklist here:
+            # doing so retried the same dead VPNGate nodes every two seconds
+            # and prevented the second tunnel from ever becoming ready.
+            return None
 
-        if candidates: return candidates.pop(0)
     return None
 
 def maintain_pool():
