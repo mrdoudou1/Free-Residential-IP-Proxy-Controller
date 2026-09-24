@@ -6,10 +6,10 @@ export default {
     const domain = url.origin;
 
     // --- 提取并处理云端安全隔离变量 ---
-    const WEB_USER = env.WEB_USER || "admin";        
-    const WEB_PASS = env.WEB_PASS || "admin888";     
-    const PROXY_USER = env.PROXY_USER || "proxy";    
-    const PROXY_PASS = env.PROXY_PASS || "888888";   
+    const WEB_USER = env.WEB_USER || "admin";
+    const WEB_PASS = env.WEB_PASS || "admin888";
+    const PROXY_USER = env.PROXY_USER || "proxy";
+    const PROXY_PASS = env.PROXY_PASS || "888888";
 
     const authenticate = (request) => {
       const authHeader = request.headers.get("Authorization");
@@ -118,23 +118,23 @@ def socks5_client(client: socket.socket, first_byte: bytes) -> None:
     try:
         methods_count = recv_exact(client, 1)[0]
         methods = recv_exact(client, methods_count)
-        
+
         if b"\\x02" not in methods:
-            client.sendall(b"\\x05\\xFF") 
+            client.sendall(b"\\x05\\xFF")
             return
         client.sendall(b"\\x05\\x02")
-        
+
         auth_req = recv_exact(client, 2)
         if auth_req[0] != 1: return
         ulen = auth_req[1]
         uname = recv_exact(client, ulen)
         plen = recv_exact(client, 1)[0]
         upass = recv_exact(client, plen)
-        
+
         if uname != PROXY_USER or upass != PROXY_PASS:
-            client.sendall(b"\\x01\\x01") 
+            client.sendall(b"\\x01\\x01")
             return
-        client.sendall(b"\\x01\\x00") 
+        client.sendall(b"\\x01\\x00")
 
         version, command, _, address_type = recv_exact(client, 4)
         if version != 5 or command != 1: return
@@ -143,7 +143,7 @@ def socks5_client(client: socket.socket, first_byte: bytes) -> None:
         elif address_type == 4: host = socket.inet_ntop(socket.AF_INET6, recv_exact(client, 16))
         else: return
         port = int.from_bytes(recv_exact(client, 2), "big")
-        
+
         upstream = create_connection((host, port), timeout=20)
         client.sendall(b"\\x05\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x00")
         relay(client, upstream)
@@ -162,7 +162,7 @@ def http_client(client: socket.socket, first_byte: bytes) -> None:
             data += chunk
         head, rest = data.split(b"\\r\\n\\r\\n", 1)
         lines = head.decode("iso-8859-1", errors="replace").split("\\r\\n")
-        
+
         expected_auth = "Basic " + base64.b64encode(PROXY_USER + b":" + PROXY_PASS).decode("ascii")
         auth_passed = False
         for line in lines[1:]:
@@ -170,7 +170,7 @@ def http_client(client: socket.socket, first_byte: bytes) -> None:
                 if line.split(":", 1)[1].strip() == expected_auth:
                     auth_passed = True
                     break
-                    
+
         if not auth_passed:
             client.sendall(b"HTTP/1.1 407 Proxy Authentication Required\\r\\nProxy-Authenticate: Basic realm=\\"Proxy\\"\\r\\n\\r\\n")
             return
@@ -249,14 +249,14 @@ WEB_PASS = "${WEB_PASS}"
 
 PROXY_PORT = 7920
 target_country = "JP"
-last_switch_trigger = 0  
+last_switch_trigger = 0
 
 state_lock = threading.Lock()
 dead_ips = set()
 last_blacklist_clear = time.time()
 public_ip = ""
 
-global_node_reservoir = {} 
+global_node_reservoir = {}
 reservoir_lock = threading.Lock()
 
 class Tunnel:
@@ -315,30 +315,30 @@ def update_config_loop():
                 data = json.loads(res.read().decode("utf-8"))
                 desired_country = str(data.get("0", "JP")).upper()
                 switch_trigger = int(data.get("switch_trigger", 0))
-                new_port = int(data.get("port", 7920))
-                
+                new_port = PROXY_PORT
+
                 if new_port != PROXY_PORT:
                     print(f"[*] 收到端口变更指令 ({PROXY_PORT} -> {new_port})，重启守护进程...", flush=True)
                     os._exit(0)
-                
+
                 with state_lock:
                     force_switch = (switch_trigger > last_switch_trigger)
                     if target_country != desired_country or force_switch:
                         target_country = desired_country
                         if force_switch: print(f"[*] 收到强制更换指令，正在清退通道并拉黑当前 IP...", flush=True)
                         else: print(f"[*] 策略热切换: 目标重定向到 {desired_country}...", flush=True)
-                        
+
                         if tun_main.entry_ip: dead_ips.add(tun_main.entry_ip)
                         if tun_main.process:
                             try: tun_main.process.terminate(); tun_main.process.wait(2)
                             except: tun_main.process.kill()
                         tun_main.ready = False; tun_main.process = None; tun_main.entry_ip = ""; tun_main.egress_ip = ""
-                        
+
                         if tun_backup.process:
                             try: tun_backup.process.terminate(); tun_backup.process.wait(2)
                             except: tun_backup.process.kill()
                         tun_backup.ready = False; tun_backup.process = None; tun_backup.entry_ip = ""; tun_backup.egress_ip = ""
-                        
+
                         last_switch_trigger = switch_trigger
         except Exception as e: pass
         time.sleep(15)
@@ -355,12 +355,12 @@ def c2_heartbeat_loop():
                     details.append({
                         "tunnel": tun.name,
                         "active": proxy_server.ACTIVE_BIND == tun.name,
-                        "country": tun.country, 
-                        "port": PROXY_PORT, 
-                        "connected_time": int(uptime), 
+                        "country": tun.country,
+                        "port": PROXY_PORT,
+                        "connected_time": int(uptime),
                         "node_ip": tun.egress_ip if tun.egress_ip else tun.entry_ip
                     })
-        
+
         payload = json.dumps({"ip": public_ip, "details": details, "logs": get_recent_logs()}).encode('utf-8')
         try:
             req = urllib.request.Request(f"{C2_URL}/api/report", data=payload, headers=get_c2_headers(), method='POST')
@@ -389,9 +389,9 @@ def harvest_snapshot_nodes() -> list:
             if not ip or not row.get("OpenVPN_ConfigData_Base64"): continue
             raw_ping = row.get("Ping", "")
             nodes.append({
-                "ip": ip, 
-                "ping": int(raw_ping) if raw_ping.isdigit() else 9999, 
-                "country": row.get("CountryShort", "").upper(), 
+                "ip": ip,
+                "ping": int(raw_ping) if raw_ping.isdigit() else 9999,
+                "country": row.get("CountryShort", "").upper(),
                 "config": base64.b64decode(row["OpenVPN_ConfigData_Base64"]).decode("utf-8", errors="replace"),
                 "harvested_at": time.time()
             })
@@ -432,19 +432,19 @@ def connect_node(tun: Tunnel, node: dict):
         cfg_path = CONFIG_DIR / f"{tun.name}.ovpn"
         log_file = WORKSPACE / f"{tun.name}_err.log"
         cfg_path.write_text(node["config"], encoding="utf-8")
-        
+
         ovpn_version = subprocess.run(["openvpn", "--version"], capture_output=True, text=True).stdout
         cipher_args = ["--ncp-ciphers", "AES-128-CBC:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305"] if "2.4" in ovpn_version else ["--data-ciphers", "AES-128-CBC:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305", "--data-ciphers-fallback", "AES-128-CBC"]
-        
+
         # 强制添加 --nobind 解除端口冲突，--route-nopull 剥夺路由修改权
-        cmd = ["openvpn", "--config", str(cfg_path), "--dev", tun.name, "--dev-type", "tun", 
+        cmd = ["openvpn", "--config", str(cfg_path), "--dev", tun.name, "--dev-type", "tun",
                "--nobind", "--route-nopull",
-               "--pull-filter", "ignore", "route-ipv6", "--pull-filter", "ignore", "ifconfig-ipv6", 
-               "--auth-user-pass", str(AUTH_FILE), "--auth-nocache", 
+               "--pull-filter", "ignore", "route-ipv6", "--pull-filter", "ignore", "ifconfig-ipv6",
+               "--auth-user-pass", str(AUTH_FILE), "--auth-nocache",
                "--connect-timeout", "5", "--connect-retry-max", "1", "--verb", "3"] + cipher_args
-               
+
         with open(log_file, "w") as f: process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
-        
+
         success = False
         for _ in range(15):
             time.sleep(1)
@@ -453,11 +453,11 @@ def connect_node(tun: Tunnel, node: dict):
                 if "Initialization Sequence Completed" in log_file.read_text():
                     success = True; break
             except: pass
-                
+
         if success and process.poll() is None:
             setup_routing(tun.name, tun.table_id)
-            time.sleep(1) 
-            
+            time.sleep(1)
+
             # --- 穿透获取通道真实出口 IP ---
             true_ip = ""
             try:
@@ -466,9 +466,9 @@ def connect_node(tun: Tunnel, node: dict):
                 if candidate_ip and candidate_ip.count('.') == 3:
                     true_ip = candidate_ip
             except: pass
-            
+
             egress_ip = true_ip if true_ip else node['ip']
-            
+
             if true_ip and true_ip != node['ip']:
                 print(f"[*] {tun.name} 探测到真实出口 IP 与入口不一致: 入口 {node['ip']} -> 出口 {true_ip}", flush=True)
 
@@ -480,11 +480,11 @@ def connect_node(tun: Tunnel, node: dict):
                 with urllib.request.urlopen(check_req, timeout=10) as check_res:
                     data = json.loads(check_res.read().decode("utf-8"))
                     isp_flag = str(data.get("isp", {}).get("flag", "")).lower()
-                    
+
                     if isp_flag == "hosting":
                         is_residential = False
             except Exception as e: pass
-            
+
             if not is_residential:
                 print(f"[-] {tun.name} 节点出口 ({egress_ip}) 检测为机房 IP，残忍抛弃！", flush=True)
                 penalize_node(node["ip"], 50000)  # 机房 IP 极重惩罚，几乎不再启用
@@ -527,22 +527,22 @@ def health_check_loop():
     while True:
         # 如果处于异常容错状态，缩短检测间隔进行快速复核
         time.sleep(15 if fail_count == 0 else 5)
-        
+
         target_tun = ""
         target_entry_ip = ""
         proc_ref = None
-        
+
         with state_lock:
             if tun_main.ready and tun_main.process and tun_main.process.poll() is None:
                 if time.time() - tun_main.connected_at > 20:
                     target_tun = tun_main.name
                     target_entry_ip = tun_main.entry_ip
                     proc_ref = tun_main.process
-        
+
         if not target_tun:
             fail_count = 0
             continue
-            
+
         # 1. 应用层：多维 HTTP 探针 (包含域名与直连IP，规避单点限流和DNS污染)
         endpoints = [
             "http://www.gstatic.com/generate_204",
@@ -550,20 +550,20 @@ def health_check_loop():
             "http://1.1.1.1",
             "http://8.8.8.8"
         ]
-        
+
         is_alive = False
         for ep in endpoints:
             res = subprocess.run(["curl", "-I", "-s", "-m", "5", "--interface", target_tun, ep], capture_output=True)
             if res.returncode == 0:
                 is_alive = True
                 break
-                
+
         # 2. 网络层：如果应用层全挂，尝试底层 ICMP (Ping) 作为终极底线
         if not is_alive:
             ping_res = subprocess.run(["ping", "-c", "2", "-W", "3", "-I", target_tun, "8.8.8.8"], capture_output=True)
             if ping_res.returncode == 0:
                 is_alive = True
-                
+
         # 3. 容错评估与处决
         if not is_alive:
             fail_count += 1
@@ -586,7 +586,7 @@ def get_best_candidate():
     with reservoir_lock:
         all_pool_nodes = sorted(list(global_node_reservoir.values()), key=lambda x: x["ping"])
         candidates = [n for n in all_pool_nodes if n["country"] == target_country and n["ip"] not in dead_ips]
-        
+
         active_ips = []
         if tun_main.entry_ip: active_ips.append(tun_main.entry_ip)
         if tun_backup.entry_ip: active_ips.append(tun_backup.entry_ip)
@@ -627,7 +627,7 @@ def maintain_pool():
                     # 状态互换 (身份对调)
                     tun_main, tun_backup = tun_backup, tun_main
                     proxy_server.ACTIVE_BIND = tun_main.name
-                    
+
                     # 异步清理死掉的旧主卡 (现在的 tun_backup)
                     if tun_backup.process:
                         try: tun_backup.process.terminate(); tun_backup.process.wait(2)
@@ -645,22 +645,22 @@ def maintain_pool():
             needs_main = not tun_main.ready and not tun_main.is_connecting
             needs_backup = not tun_backup.ready and not tun_backup.is_connecting
 
+        # Fill both slots independently so one failed slot cannot starve the other.
         if needs_main:
             node = get_best_candidate()
             if node:
-                with state_lock: 
+                with state_lock:
                     tun_main.is_connecting = True
-                    tun_main.entry_ip = node["ip"] # FIX 1: 提前占住坑位，防止备用通道刚好获取到同样的 IP 导致死锁冲突
+                    tun_main.entry_ip = node["ip"]
                 threading.Thread(target=connect_node, args=(tun_main, node,), daemon=True).start()
-                time.sleep(1)
-        elif needs_backup:
+
+        if needs_backup:
             node = get_best_candidate()
             if node:
-                with state_lock: 
+                with state_lock:
                     tun_backup.is_connecting = True
-                    tun_backup.entry_ip = node["ip"] # FIX 1: 提前占住坑位
+                    tun_backup.entry_ip = node["ip"]
                 threading.Thread(target=connect_node, args=(tun_backup, node,), daemon=True).start()
-
         time.sleep(2)
 
 def main():
@@ -669,9 +669,9 @@ def main():
     get_public_ip()
     setup_env()
     subprocess.run(["pkill", "-f", "openvpn.*tun_main|tun_backup"], capture_output=True)
-    
+
     proxy_server.ACTIVE_BIND = tun_main.name
-    
+
     try:
         req = urllib.request.Request(f"{C2_URL}/api/config", headers=get_c2_headers())
         with urllib.request.urlopen(req, timeout=10) as res:
@@ -759,12 +759,12 @@ echo "[+] 引擎更新成功！主备双活通道、异步刷IP逻辑已全量�
                 }
             });
             const data = await resp.text();
-            return new Response(data, { 
+            return new Response(data, {
                 status: resp.status,
-                headers: { 
-                    "Content-Type": resp.headers.get("content-type") || "application/json", 
-                    "Access-Control-Allow-Origin": "*" 
-                } 
+                headers: {
+                    "Content-Type": resp.headers.get("content-type") || "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
             });
         } catch (err) {
             return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { "Content-Type": "application/json" } });
@@ -790,7 +790,7 @@ echo "[+] 引擎更新成功！主备双活通道、异步刷IP逻辑已全量�
             const allCountries = new Set([...predefinedCountries, ...Array.from(dynamicCountries)]);
             return new Response(JSON.stringify(Array.from(allCountries).sort()), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
         } catch(err) {
-            return new Response(JSON.stringify(["US", "JP", "KR", "SG", "HK", "TW"]), { headers: { "Content-Type": "application/json" } }); 
+            return new Response(JSON.stringify(["US", "JP", "KR", "SG", "HK", "TW"]), { headers: { "Content-Type": "application/json" } });
         }
     }
 
@@ -806,7 +806,7 @@ echo "[+] 引擎更新成功！主备双活通道、异步刷IP逻辑已全量�
 
     if (url.pathname === "/api/config" && request.method === "POST") {
         const data = await request.json();
-        const sanitizedMap = { 
+        const sanitizedMap = {
             "0": data["0"] || "JP",
             "port": parseInt(data.port) || 7920
         };
@@ -847,9 +847,9 @@ echo "[+] 引擎更新成功！主备双活通道、异步刷IP逻辑已全量�
       const cutoff = Date.now() - 120000;
       await env.DB.prepare(`DELETE FROM servers WHERE last_seen < ?1`).bind(cutoff).run();
       const { results } = await env.DB.prepare(`
-        SELECT s.*, l.logs 
-        FROM servers s 
-        LEFT JOIN server_logs l ON s.ip = l.ip 
+        SELECT s.*, l.logs
+        FROM servers s
+        LEFT JOIN server_logs l ON s.ip = l.ip
         ORDER BY s.last_seen DESC
       `).all();
       return new Response(JSON.stringify(results || []), { headers: { "Content-Type": "application/json" } });
@@ -879,7 +879,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
         ::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 1); }
-        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
@@ -896,7 +896,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                     直链提取 API: <a href="/api/proxies" target="_blank" class="text-indigo-400 hover:text-indigo-300 border-b border-indigo-400/30 hover:border-indigo-300 transition-colors">${domain}/api/proxies</a>
                 </p>
             </div>
-            
+
             <div class="flex flex-col gap-3 w-full md:w-auto">
                 <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl overflow-hidden shadow-lg">
                     <div class="bg-slate-800/50 px-4 py-2 border-b border-slate-700/50 flex items-center gap-2">
@@ -941,23 +941,23 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                 <div class="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
                     <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                 </div>
-                
+
                 <div class="mb-6 relative z-10">
                     <h2 class="text-2xl font-bold text-slate-100 tracking-wide mb-1 flex items-center gap-2">主备双活调度引擎 <span class="bg-indigo-500/20 text-indigo-400 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border border-indigo-500/30">Active-Standby</span></h2>
                     <p class="text-sm text-slate-400">单路端口锁定，内置主备双路隧道 (tun_main / tun_backup)，通道死活将由软开关瞬间接管。</p>
                 </div>
-                
+
                 <div class="flex flex-wrap items-center bg-slate-950/50 border border-slate-800/80 rounded-xl p-5 relative z-10 gap-y-4">
                     <div class="flex items-center gap-3 mr-3 border-r border-slate-700/50 pr-4">
                         <span class="text-slate-400 text-sm font-medium whitespace-nowrap">目标地区:</span>
                         <input type="text" id="slot-cfg-0" value="JP" maxlength="2" class="bg-slate-900 border border-slate-700 rounded-lg py-2 w-16 text-white font-bold text-lg uppercase text-center focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all shadow-inner" placeholder="US" />
                     </div>
-                    
+
                     <div class="flex items-center gap-3 mr-4">
                         <span class="text-slate-400 text-sm font-medium whitespace-nowrap">服务端口:</span>
                         <input type="number" id="slot-port" value="7920" min="1024" max="65535" class="bg-slate-900 border border-slate-700 rounded-lg py-2 w-24 text-white font-bold text-lg text-center focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all shadow-inner" placeholder="7920" />
                     </div>
-                    
+
                     <button onclick="saveConfig()" class="group relative px-6 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold shadow-lg shadow-blue-900/20 hover:shadow-indigo-900/40 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ml-auto">
                         <div class="absolute inset-0 bg-white/20 group-hover:translate-x-full -translate-x-full transform transition-transform duration-300 ease-in-out skew-x-12"></div>
                         <span class="flex items-center gap-2">
@@ -965,7 +965,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                             下发策略
                         </span>
                     </button>
-                    
+
                     <div class="h-8 w-px bg-slate-800 mx-2 hidden sm:block"></div>
 
                     <button onclick="switchIP()" class="group relative px-6 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-bold shadow-lg shadow-purple-900/20 hover:shadow-pink-900/40 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
@@ -978,7 +978,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                 </div>
             </div>
         </div>
-        
+
         <div class="bg-slate-900/40 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-xl overflow-hidden shadow-black/20 mb-8">
             <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
                 <h3 class="font-semibold text-slate-200 flex items-center gap-2">
@@ -1013,7 +1013,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                     原版页面 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                 </a>
             </div>
-            
+
             <div id="native-score-container" class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-[#090E17]">
                 <div class="col-span-full py-16 flex flex-col items-center justify-center text-slate-500">
                     <svg class="animate-spin h-8 w-8 text-indigo-500 mb-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -1084,11 +1084,11 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
         async function loadNativeIpScore(ip) {
             const container = document.getElementById('native-score-container');
             container.innerHTML = '<div class="col-span-full py-16 flex flex-col items-center justify-center text-slate-500"><svg class="animate-spin h-8 w-8 text-indigo-500 mb-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>穿透请求中，正在构建原生质检报告...</span></div>';
-            
+
             try {
                 const res = await fetch('/api/testisp-lookup/' + encodeURIComponent(ip));
                 const rawText = await res.text();
-                
+
                 let d;
                 try {
                     d = JSON.parse(rawText);
@@ -1096,7 +1096,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                     const safeText = rawText.substring(0, 500).replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     throw new Error(\`目标接口返回了非 JSON 格式数据(可能 API 路径错误或被云端盾拦截)。<br>HTTP 状态码: \${res.status}<br><div class="mt-3 text-left bg-slate-900 p-3 rounded text-xs text-rose-300 font-mono break-all overflow-y-auto max-h-32 border border-rose-500/30">\${safeText}</div>\`);
                 }
-                
+
                 if (!d || !d.geo || !d.isp) {
                     container.innerHTML = \`<div class="col-span-full text-center py-8 text-rose-400 bg-rose-500/10 rounded-xl border border-rose-500/20">无法获取报告: 接口返回数据结构异常 \${d.error || ''}</div>\`;
                     return;
@@ -1105,11 +1105,11 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                 const isHosting = d.isp.flag === 'hosting';
                 const threat = d.risk.threat_listed;
                 const isNative = d.geo.is_native;
-                
-                const tags = isHosting 
-                    ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold">机房IP</span>' 
+
+                const tags = isHosting
+                    ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold">机房IP</span>'
                     : '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-bold">家庭宽带</span>';
-                
+
                 const locStr = [d.geo.country, d.geo.city].filter(Boolean).join(" ");
                 const orgStr = d.isp.org || '-';
 
@@ -1118,7 +1118,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                         <div class="flex items-center gap-4">
                             <span class="text-3xl font-extrabold font-mono text-white tracking-tight drop-shadow-sm">\${ip}</span>
                             <span class="text-slate-400 text-sm hidden sm:flex items-center border-l border-slate-700 pl-4 h-6">
-                                <span class="uppercase tracking-widest text-indigo-400 mr-2 text-xs font-bold">\${d.geo.country_code || 'N/A'}</span> 
+                                <span class="uppercase tracking-widest text-indigo-400 mr-2 text-xs font-bold">\${d.geo.country_code || 'N/A'}</span>
                                 \${locStr} · \${orgStr}
                             </span>
                         </div>
@@ -1158,7 +1158,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                 const servers = await res.json();
                 const tbody = document.getElementById('nodes-table');
                 const terminal = document.getElementById('terminal-output');
-                
+
                 if (!servers || servers.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" class="py-12 text-center text-slate-500 flex-col items-center justify-center"><svg class="w-12 h-12 mx-auto text-slate-700 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>未检测到在线母机，请在 VPS 运行纳管命令接入</td></tr>';
                     return;
@@ -1167,7 +1167,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                 tbody.innerHTML = servers.map(server => {
                     const details = JSON.parse(server.details || '[]');
                     const timeAgo = Math.floor((Date.now() - server.last_seen) / 1000);
-                    
+
                     let proxyBadges = '';
                     if (details.length === 0) {
                         proxyBadges = \`
@@ -1179,11 +1179,11 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                         proxyBadges = '<div class="flex flex-col gap-2">' + details.map(d => {
                             const isActive = d.active;
                             const statusColorClass = isActive ? 'bg-emerald-500' : 'bg-sky-500';
-                            const statusText = isActive ? 'ACTIVE (业务出口)' : 'STANDBY (热备就绪)';
+                            const statusText = isActive ? '主用（业务出口）' : '备用（热备就绪）';
                             const borderColorClass = isActive ? 'border-emerald-500/30' : 'border-sky-500/30';
                             const bgColorClass = isActive ? 'bg-emerald-500/10' : 'bg-sky-500/10';
                             const textColorClass = isActive ? 'text-emerald-400' : 'text-sky-400';
-                            
+
                             return \`
                             <div class="inline-flex items-center bg-slate-950 border border-slate-800/80 rounded-xl px-2.5 py-1.5 shadow-inner">
                                 <span class="bg-slate-800 text-slate-300 font-mono text-xs px-2 py-0.5 rounded-md mr-3 border border-slate-700 font-bold">\${d.tunnel}</span>
@@ -1229,7 +1229,7 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                         if (newIp !== currentScoreIp) {
                             currentScoreIp = newIp;
                             document.getElementById('ip-score-section').style.display = 'block';
-                            
+
                             // 针对 testisp.info 前端默认仅查本机的防呆机制：自动复制 IP 到剪贴板，跳转后由用户粘贴
                             const scoreLink = document.getElementById('ip-score-link');
                             scoreLink.href = \`https://testisp.info/?ip=\${newIp}\`;
@@ -1247,27 +1247,27 @@ const DASHBOARD_HTML = (domain, webUser, webPass, proxyUser, proxyPass) => `
                         }
                     }
                 }
-                
+
                 if (servers[0] && servers[0].logs) {
                     const isAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 30;
-                    
+
                     let logHTML = servers[0].logs
                         .replace(/</g, '&lt;').replace(/>/g, '&gt;')
                         .replace(/\\[\\*\\]/g, '<span class="text-indigo-400 font-bold">[*]</span>')
                         .replace(/\\[\\+\\]/g, '<span class="text-emerald-400 font-bold">[+]</span>')
                         .replace(/\\[\\-\\]/g, '<span class="text-rose-400 font-bold">[-]</span>')
                         .replace(/\\[\\!\\]/g, '<span class="text-amber-400 font-bold">[!]</span>');
-                        
+
                     terminal.innerHTML = '<pre class="whitespace-pre-wrap break-all">' + logHTML + '</pre>';
-                    
+
                     if (isAtBottom) {
                         terminal.scrollTop = terminal.scrollHeight;
                     }
                 }
-                
+
             } catch (err) {}
         }
-        
+
         fetchCountries();
         loadConfig();
         fetchNodes();
